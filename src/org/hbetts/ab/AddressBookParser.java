@@ -5,17 +5,21 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.StringWriter;
 
 import javax.xml.XMLConstants;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 
 import org.xml.sax.SAXException;
 
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class AddressBookParser {
@@ -27,70 +31,111 @@ public class AddressBookParser {
 	private static String inForm;
 	private static String outForm;
 	private static String validate;
+	private static ObjectMapper jsonObjectMapper;
 
 	public static void main(String[] args) {
-		//check for "help"
-		for(String arg : args) {
-			if(arg.equalsIgnoreCase("help")){
+		// check for "help"
+		for (String arg : args) {
+			if (arg.equalsIgnoreCase("help")) {
 				showHelp(ALL_GOOD);
 			}
 		}
-		
-		//validate args
+
+		// validate args
 		if (isValid(args)) {
 			inForm = args[0];
 			outForm = args[1];
 			fileName = args[2];
-			if(args.length>3) {
+			if (args.length > 3) {
 				validate = String.valueOf(args[3].equalsIgnoreCase("validate"));
 			} else {
 				validate = "false";
 			}
+			jsonObjectMapper = new ObjectMapper();
 		}
-		
-		if(inForm.equalsIgnoreCase(XML_FORMAT)) {
+
+		if (inForm.equalsIgnoreCase(XML_FORMAT)) {
 			try {
 				JAXBContext jaxbContext = JAXBContext.newInstance(AddressBook.class);
 				Unmarshaller xmlUnmarshaller = jaxbContext.createUnmarshaller();
-				if(Boolean.valueOf(validate)) {
+				if (Boolean.valueOf(validate)) {
 					SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
 					Schema s = sf.newSchema(new File("resources\\ab.xsd"));
 					xmlUnmarshaller.setSchema(s);
 					xmlUnmarshaller.setEventHandler(new SchemaEventValidationHandler());
 				}
 				AddressBook addressBook = (AddressBook) xmlUnmarshaller.unmarshal(new File(fileName));
-				if(Boolean.valueOf(validate)) {
+				if (Boolean.valueOf(validate)) {
 					System.out.println("XML is Valid");
 				}
-				if(outForm.equalsIgnoreCase(JSON_FORMAT)) {
-					ObjectMapper jsonObjectMapper = new ObjectMapper();
-					System.out.println(jsonObjectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(addressBook));		
+				if (outForm.equalsIgnoreCase(JSON_FORMAT)) {
+
+					System.out
+							.println(jsonObjectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(addressBook));
 				} else {
-					BufferedReader reader = new BufferedReader(new FileReader(fileName));
-					while (reader.ready()) {
-						String line = reader.readLine();
-						System.out.println(line);
-					}
-					reader.close();
+					emitFile();
 				}
-				
+
 			} catch (JAXBException e) {
-				System.out.println("Unable to unmarshall the XML File:("+e.getMessage()+")");
+				System.out.println("Unable to unmarshall the XML File:(" + e.getMessage() + ")");
+				System.exit(BAD);
 			} catch (JsonProcessingException e) {
 				System.out.println("Unable to marshal XML to JSON:(" + e.getMessage() + ")");
-				System.exit(-2);
+				System.exit(BAD);
 			} catch (SAXException e) {
 				System.out.println("Unable to read the schema file.");
 				e.printStackTrace();
+				System.exit(BAD);
 			} catch (FileNotFoundException e) {
-				System.out.println("Unable to find file ("+fileName+")");
-				System.exit(-2);
+				System.out.println("Unable to find file (" + fileName + ")");
+				System.exit(BAD);
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
+				System.exit(BAD);
 			}
-		}
+		} else {
+			if (outForm.equalsIgnoreCase(XML_FORMAT)) {
+				try {
+					AddressBook addressBook = jsonObjectMapper.readValue(new File(fileName), AddressBook.class);
+					JAXBContext jaxbContext = JAXBContext.newInstance(AddressBook.class);
+					Marshaller xmlMarshaller = jaxbContext.createMarshaller();
+					xmlMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+					StringWriter sw = new StringWriter();
+					xmlMarshaller.marshal(addressBook, sw);
+					String result = sw.toString();
+					System.out.println(result);
+				} catch (JsonParseException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (JsonMappingException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (JAXBException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			} else {
+				try {
+					emitFile();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		} 
 
+	}
+
+	private static void emitFile() throws IOException {
+		BufferedReader reader = new BufferedReader(new FileReader(fileName));
+		while (reader.ready()) {
+			String line = reader.readLine();
+			System.out.println(line);
+		}
+		reader.close();
 	}
 
 	private static boolean isValid(String[] args) {

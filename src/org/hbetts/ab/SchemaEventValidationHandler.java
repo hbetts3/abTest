@@ -1,5 +1,9 @@
 package org.hbetts.ab;
 
+/**
+ * Borrowed from Blaise Doughan
+ * http://blog.bdoughan.com/2010/12/jaxb-and-marshalunmarshal-schema.html
+ */
 import javax.xml.bind.ValidationEvent;
 import javax.xml.bind.ValidationEventHandler;
  
